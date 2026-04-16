@@ -48,6 +48,14 @@ def get_positions() -> list[dict]:
     ]
 
 
+import re
+
+_SYMBOL_RE = re.compile(r"^[A-Z]{1,5}$")
+_VALID_SIDES = {"buy", "sell"}
+_VALID_ORDER_TYPES = {"market", "limit"}
+_VALID_TIF = {"day", "gtc", "ioc", "fok"}
+
+
 def submit_order(
     symbol: str,
     qty: float,
@@ -56,14 +64,35 @@ def submit_order(
     limit_price: float | None = None,
     time_in_force: str = "day",
 ) -> dict:
-    side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-    tif_enum = TimeInForce(time_in_force.lower())
+    # --- input validation ---
+    symbol = symbol.upper().strip()
+    if not _SYMBOL_RE.match(symbol):
+        raise ValueError(f"Invalid symbol: {symbol!r} (must be 1-5 letters)")
 
-    if order_type.lower() == "limit":
+    if qty <= 0:
+        raise ValueError(f"qty must be positive, got {qty}")
+
+    side_lower = side.lower().strip()
+    if side_lower not in _VALID_SIDES:
+        raise ValueError(f"Invalid side: {side!r} (must be 'buy' or 'sell')")
+    side_enum = OrderSide.BUY if side_lower == "buy" else OrderSide.SELL
+
+    order_type_lower = order_type.lower().strip()
+    if order_type_lower not in _VALID_ORDER_TYPES:
+        raise ValueError(f"Invalid order_type: {order_type!r} (must be 'market' or 'limit')")
+
+    tif_lower = time_in_force.lower().strip()
+    if tif_lower not in _VALID_TIF:
+        raise ValueError(f"Invalid time_in_force: {time_in_force!r} (must be one of {_VALID_TIF})")
+    tif_enum = TimeInForce(tif_lower)
+
+    if order_type_lower == "limit":
         if limit_price is None:
             raise ValueError("limit_price required for limit orders")
+        if limit_price <= 0:
+            raise ValueError(f"limit_price must be positive, got {limit_price}")
         req = LimitOrderRequest(
-            symbol=symbol.upper(),
+            symbol=symbol,
             qty=qty,
             side=side_enum,
             limit_price=limit_price,
@@ -71,7 +100,7 @@ def submit_order(
         )
     else:
         req = MarketOrderRequest(
-            symbol=symbol.upper(),
+            symbol=symbol,
             qty=qty,
             side=side_enum,
             time_in_force=tif_enum,

@@ -225,7 +225,7 @@ async def on_message(message: discord.Message):
     log.info(
         f"seen msg from {message.author} (id={message.author.id}) "
         f"channel={message.channel.id} dm={is_dm} mention={is_mention} "
-        f"allowed_channel={is_allowed_channel} content={message.content!r}"
+        f"allowed_channel={is_allowed_channel}"
     )
     if not (is_dm or is_mention or is_allowed_channel):
         return

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 import uuid
 
@@ -32,6 +33,12 @@ log = logging.getLogger("wa-bridge")
 
 BRIDGE_TOKEN = os.environ.get("BRIDGE_TOKEN", "")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "4000"))
+MAX_REQUEST_MESSAGES = 50
+MAX_REQUESTS_PER_MINUTE = 10
+
+if not BRIDGE_TOKEN:
+    log.error("BRIDGE_TOKEN is not set. Refusing to start without auth.")
+    sys.exit(1)
 
 app = FastAPI()
 
@@ -40,6 +47,7 @@ SESSION_MAX_AGE = 6 * 60 * 60  # 6 hours idle → auto-reset
 _sessions: dict[str, ClaudeSDKClient] = {}
 _session_meta: dict[str, dict] = {}
 _locks: dict[str, asyncio.Lock] = {}
+_rate_window: dict[str, list[float]] = {}
 
 
 class Message(BaseModel):
@@ -66,8 +74,14 @@ def _content_to_text(content) -> str:
     return ""
 
 
-def _peer_key(req: ChatRequest) -> str:
-    return req.user or "default"
+def _check_rate_limit(key: str) -> bool:
+    now = time.time()
+    window = _rate_window.setdefault(key, [])
+    window[:] = [t for t in window if now - t < 60]
+    if len(window) >= MAX_REQUESTS_PER_MINUTE:
+        return False
+    window.append(now)
+    return True
 
 
 async def _expire_session(key: str):
@@ -78,7 +92,7 @@ async def _expire_session(key: str):
             pass
         _sessions.pop(key, None)
         _session_meta.pop(key, None)
-        log.info(f"Expired session for {key}")
+        log.info(f"Expired session for peer={key[:8]}...")
 
 
 async def _get_session(key: str) -> ClaudeSDKClient:
@@ -92,7 +106,7 @@ async def _get_session(key: str) -> ClaudeSDKClient:
         await client.connect()
         _sessions[key] = client
         _session_meta[key] = {"last_used": time.time(), "turns": 0}
-        log.info(f"Created session for {key}")
+        log.info(f"Created session for peer={key[:8]}...")
     else:
         _session_meta[key]["last_used"] = time.time()
         _session_meta[key]["turns"] += 1
@@ -106,28 +120,38 @@ def _get_lock(key: str) -> asyncio.Lock:
 
 
 async def _wa_confirm_stub(summary: str) -> bool:
-    log.warning(f"Order confirmation requested but no WA confirm path: {summary}")
+    log.warning("Order confirmation requested via WA bridge (denied)")
     return False
 
 
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")
 async def chat_completions(req: ChatRequest, request: Request):
-    if BRIDGE_TOKEN:
-        auth = request.headers.get("authorization", "")
-        if not auth.startswith("Bearer ") or auth[7:] != BRIDGE_TOKEN:
-            raise HTTPException(status_code=401, detail="bad token")
+    # Auth — always required
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer ") or auth[7:] != BRIDGE_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
 
-    log.info(f"Request: model={req.model} stream={req.stream} user={req.user} msgs={len(req.messages)}")
-    for m in req.messages:
-        log.info(f"  [{m.role}] {_content_to_text(m.content)[:120]}")
+    # Require caller identity — no shared "default" session
+    if not req.user or not req.user.strip():
+        raise HTTPException(status_code=400, detail="'user' field is required")
+    key = req.user.strip()
+
+    # Rate limit per caller
+    if not _check_rate_limit(key):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+
+    # Message count cap
+    if len(req.messages) > MAX_REQUEST_MESSAGES:
+        raise HTTPException(status_code=400, detail=f"max {MAX_REQUEST_MESSAGES} messages")
+
+    log.info(f"Request: peer={key[:8]}... msgs={len(req.messages)} stream={req.stream}")
 
     user_msgs = [m for m in req.messages if m.role == "user"]
     if not user_msgs:
         raise HTTPException(status_code=400, detail="no user message")
     latest = _content_to_text(user_msgs[-1].content)
 
-    key = _peer_key(req)
     lock = _get_lock(key)
     async with lock:
         confirm_callback.set(_wa_confirm_stub)
@@ -149,7 +173,7 @@ async def chat_completions(req: ChatRequest, request: Request):
         if not reply:
             reply = "(no reply)"
 
-    log.info(f"Reply ({len(reply)} chars): {reply[:200]}")
+    log.info(f"Reply: peer={key[:8]}... chars={len(reply)}")
 
     cmpl_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     model_name = req.model or "trading-agent"
