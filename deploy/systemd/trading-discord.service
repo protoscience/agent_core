@@ -1,0 +1,14 @@
+[Unit]
+Description=Trading Agent - Discord Bot
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/eswar/claude/trading-agent
+EnvironmentFile=/home/eswar/claude/trading-agent/.env
+ExecStart=/home/eswar/claude/trading-agent/.venv/bin/python discord_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

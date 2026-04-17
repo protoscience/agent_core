@@ -1,0 +1,12 @@
+[Unit]
+Description=Trading Agent - File Watcher (auto-restart on code changes)
+After=trading-discord.service trading-wa-bridge.service
+
+[Service]
+Type=simple
+ExecStart=/home/eswar/claude/trading-agent/watch-restart.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

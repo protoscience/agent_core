@@ -1,0 +1,13 @@
+[Unit]
+Description=Trading Agent - Reverse SSH Tunnel to VPS (port 4000)
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=AUTOSSH_GATETIME=0
+ExecStart=/usr/bin/autossh -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 4000:127.0.0.1:4000 admin@minions.protoscience.org
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

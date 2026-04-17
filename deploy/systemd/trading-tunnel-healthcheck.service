@@ -1,0 +1,7 @@
+[Unit]
+Description=Trading Agent - Reverse SSH Tunnel Healthcheck
+After=trading-ssh-tunnel.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/eswar/claude/trading-agent/tunnel-healthcheck.sh
