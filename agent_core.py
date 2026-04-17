@@ -94,6 +94,20 @@ async def get_bars(args):
     return {"content": [{"type": "text", "text": str(bars)}]}
 
 
+@tool(
+    "get_premarket_snapshot",
+    "Pre-market snapshot for a US equity. Returns current session "
+    "(pre-market / regular / after-hours / closed / weekend), previous "
+    "regular-session close, today's pre-market OHLC and volume (04:00–09:30 ET), "
+    "latest quote, and gap % vs previous close. Use this when the user asks "
+    "about pre-market action, gaps, or how a stock is trading before the open.",
+    {"symbol": str},
+)
+async def get_premarket_snapshot(args):
+    snap = market_data.get_premarket_snapshot(args["symbol"])
+    return {"content": [{"type": "text", "text": str(snap)}]}
+
+
 @tool("get_account", "Get paper trading account status and buying power.", {})
 async def get_account(args):
     return {"content": [{"type": "text", "text": str(trading.get_account())}]}
@@ -285,6 +299,7 @@ ALL_TOOLS = [
     search_web,
     get_quote,
     get_bars,
+    get_premarket_snapshot,
     get_account,
     get_positions,
     get_orders,
@@ -301,6 +316,7 @@ RESEARCH_TOOLS = [
     search_web,
     get_quote,
     get_bars,
+    get_premarket_snapshot,
     list_option_expirations,
     get_option_chain,
     get_option_snapshot,
