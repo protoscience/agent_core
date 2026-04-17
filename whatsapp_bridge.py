@@ -43,7 +43,7 @@ if not BRIDGE_TOKEN:
 
 app = FastAPI()
 
-SESSION_MAX_AGE = 6 * 60 * 60  # 6 hours idle → auto-reset
+SESSION_MAX_AGE = 12 * 60 * 60  # 12 hours idle → auto-reset
 
 _sessions: dict[str, ClaudeSDKClient] = {}
 _session_meta: dict[str, dict] = {}
@@ -120,6 +120,28 @@ async def _expire_session(key: str):
         _sessions.pop(key, None)
         _session_meta.pop(key, None)
         log.info(f"Expired session for peer={key[:8]}...")
+
+
+async def _sweep_idle_sessions():
+    # Without this, peers who chat once and disappear leak SDK subprocesses
+    # until the bridge is restarted — _get_session only checks idle age when
+    # the same peer returns.
+    while True:
+        await asyncio.sleep(300)
+        now = time.time()
+        for key in list(_sessions):
+            meta = _session_meta.get(key, {})
+            if now - meta.get("last_used", 0) <= SESSION_MAX_AGE:
+                continue
+            lock = _locks.get(key)
+            if lock is not None and lock.locked():
+                continue
+            await _expire_session(key)
+
+
+@app.on_event("startup")
+async def _start_sweeper():
+    asyncio.create_task(_sweep_idle_sessions())
 
 
 async def _get_session(key: str) -> ClaudeSDKClient:
