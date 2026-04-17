@@ -1,0 +1,7 @@
+[Unit]
+Description=Trading Agent - Cost rollup (raw turns -> daily/weekly, prune)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/eswar/claude/trading-agent
+ExecStart=/home/eswar/claude/trading-agent/.venv/bin/python -m tools.cost_rollup

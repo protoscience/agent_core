@@ -27,6 +27,7 @@ from claude_agent_sdk import (
 
 from agent_core import build_options, IMAGE_MARKER
 from tools.confirm import confirm_callback
+from tools import cost_log
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -225,6 +226,7 @@ async def chat_completions(req: ChatRequest, request: Request):
             yield _delta_chunk({"role": "assistant"})
             line_buf = ""
             total_chars = 0
+            result_msg = None
             async with lock:
                 confirm_callback.set(_wa_confirm_stub)
                 client = await _get_session(key)
@@ -247,13 +249,20 @@ async def chat_completions(req: ChatRequest, request: Request):
                                 # the TCP stream alive during long tool calls.
                                 yield f": tool {block.name}\n\n"
                     elif isinstance(msg, ResultMessage):
+                        result_msg = msg
                         break
             if line_buf and IMAGE_MARKER not in line_buf:
                 total_chars += len(line_buf)
                 yield _delta_chunk({"content": line_buf})
             if total_chars == 0:
                 yield _delta_chunk({"content": "(no reply)"})
-            log.info(f"Reply: peer={key[:8]}... chars={total_chars} (stream)")
+            cost = (result_msg.total_cost_usd or 0) if result_msg else 0
+            turns = result_msg.num_turns if result_msg else 0
+            log.info(f"Reply: peer={key[:8]}... chars={total_chars} turns={turns} cost=${cost:.4f} (stream)")
+            try:
+                cost_log.log_turn("wa", key, turns, cost)
+            except Exception:
+                log.exception("cost_log failed")
             done = {
                 "id": cmpl_id,
                 "object": "chat.completion.chunk",
@@ -271,6 +280,7 @@ async def chat_completions(req: ChatRequest, request: Request):
         await client.query(latest)
 
         text_buf = ""
+        result_msg = None
         async for msg in client.receive_response():
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
@@ -279,13 +289,20 @@ async def chat_completions(req: ChatRequest, request: Request):
                     elif isinstance(block, ToolUseBlock):
                         log.info(f"tool: {block.name}")
             elif isinstance(msg, ResultMessage):
+                result_msg = msg
                 break
 
         reply = "\n".join(l for l in text_buf.splitlines() if IMAGE_MARKER not in l).strip()
         if not reply:
             reply = "(no reply)"
 
-    log.info(f"Reply: peer={key[:8]}... chars={len(reply)}")
+    cost = (result_msg.total_cost_usd or 0) if result_msg else 0
+    turns = result_msg.num_turns if result_msg else 0
+    log.info(f"Reply: peer={key[:8]}... chars={len(reply)} turns={turns} cost=${cost:.4f}")
+    try:
+        cost_log.log_turn("wa", key, turns, cost)
+    except Exception:
+        log.exception("cost_log failed")
 
     return {
         "id": cmpl_id,

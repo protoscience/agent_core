@@ -19,6 +19,7 @@ from claude_agent_sdk import (
 
 from agent_core import build_options, IMAGE_MARKER
 from tools.confirm import confirm_callback
+from tools import cost_log
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -203,6 +204,10 @@ async def handle_message(message: discord.Message):
                         image_paths = []
                         cost = msg.total_cost_usd or 0
                         log.info(f"user={user_id} turns={msg.num_turns} cost=${cost:.4f}")
+                        try:
+                            cost_log.log_turn("discord", user_id, msg.num_turns, cost)
+                        except Exception:
+                            log.exception("cost_log failed")
                         break
             except Exception as e:
                 log.exception("Agent error")

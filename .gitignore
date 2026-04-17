@@ -12,3 +12,4 @@ baileys-ws/
 searxng/
 package-lock.json
 .claude/
+logs/
