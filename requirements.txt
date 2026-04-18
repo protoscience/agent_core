@@ -7,6 +7,6 @@ discord.py>=2.4.0
 websockets>=12.0
 matplotlib>=3.8.0
 playwright>=1.50.0
-jinja2>=3.1.0
+jinja2>=3.1.6
 fastapi>=0.115.0
 uvicorn>=0.30.0
