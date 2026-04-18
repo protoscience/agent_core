@@ -1,7 +1,7 @@
 # Business Magnet - AI Trading Research Agent
 
-[![Security](https://github.com/protoscience/business_magnet/actions/workflows/security.yml/badge.svg)](https://github.com/protoscience/business_magnet/actions/workflows/security.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/protoscience/business_magnet/badge)](https://scorecard.dev/viewer/?uri=github.com/protoscience/business_magnet)
+[![Security](https://github.com/protoscience/agent_core/actions/workflows/security.yml/badge.svg)](https://github.com/protoscience/agent_core/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/protoscience/agent_core/badge)](https://scorecard.dev/viewer/?uri=github.com/protoscience/agent_core)
 
 A Claude-powered trading research agent with Discord and WhatsApp interfaces. Uses Alpaca for paper trading and market data, SearXNG for web search, and generates rich visual analysis cards.
 
@@ -60,8 +60,8 @@ Shared:
 ### 1. Clone and configure
 
 ```bash
-git clone git@github.com:protoscience/business_magnet.git
-cd business_magnet
+git clone git@github.com:protoscience/agent_core.git
+cd agent_core
 
 cp .env.example .env
 # Fill in your API keys in .env
@@ -103,9 +103,9 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/business_magnet
-EnvironmentFile=/path/to/business_magnet/.env
-ExecStart=/path/to/business_magnet/.venv/bin/python discord_bot.py
+WorkingDirectory=/path/to/agent_core
+EnvironmentFile=/path/to/agent_core/.env
+ExecStart=/path/to/agent_core/.venv/bin/python discord_bot.py
 Restart=always
 RestartSec=5
 
@@ -121,11 +121,11 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/business_magnet
-EnvironmentFile=/path/to/business_magnet/.env
+WorkingDirectory=/path/to/agent_core
+EnvironmentFile=/path/to/agent_core/.env
 Environment=BRIDGE_TOKEN=<generate-with-python3 -c "import secrets; print(secrets.token_hex(24))">
 Environment=BRIDGE_PORT=4000
-ExecStart=/path/to/business_magnet/.venv/bin/python whatsapp_bridge.py
+ExecStart=/path/to/agent_core/.venv/bin/python whatsapp_bridge.py
 Restart=always
 RestartSec=5
 
@@ -158,7 +158,7 @@ After=trading-discord.service trading-wa-bridge.service
 
 [Service]
 Type=simple
-ExecStart=/path/to/business_magnet/watch-restart.sh
+ExecStart=/path/to/agent_core/watch-restart.sh
 Restart=always
 RestartSec=5
 
