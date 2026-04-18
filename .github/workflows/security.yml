@@ -17,8 +17,8 @@ jobs:
     name: CodeQL (Python)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v4
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v3
         with:
           languages: python
           queries: security-and-quality
@@ -30,8 +30,8 @@ jobs:
     name: Bandit (Python SAST)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install bandit[sarif]
@@ -46,8 +46,8 @@ jobs:
     name: pip-audit (CVE scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install pip-audit
@@ -58,7 +58,7 @@ jobs:
     name: Gitleaks (secret scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
