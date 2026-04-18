@@ -54,7 +54,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pip-audit
       - name: Audit requirements.txt
-        run: pip-audit -r requirements.txt --disable-pip --strict
+        run: pip-audit -r requirements.txt --strict
 
   gitleaks:
     name: Gitleaks (secret scan)
