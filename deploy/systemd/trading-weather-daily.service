@@ -1,0 +1,8 @@
+[Unit]
+Description=Trading Agent - Daily 24h Weather Card to WhatsApp
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/eswar/claude/trading-agent
+ExecStart=/home/eswar/claude/trading-agent/.venv/bin/python -m tools.weather_daily
