@@ -1,4 +1,5 @@
 """Open-Meteo forecast client (free, no API key)."""
+import time
 import httpx
 from datetime import datetime, timezone
 
@@ -76,9 +77,21 @@ def fetch_forecast(
         "forecast_hours": hours,
         "forecast_days": 2,
     }
-    r = httpx.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=15.0)
-    r.raise_for_status()
-    return r.json()
+    # Open-Meteo occasionally returns 5xx; retry transient failures with backoff.
+    last_exc: Exception | None = None
+    for attempt in range(4):
+        try:
+            r = httpx.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=15.0)
+            if 500 <= r.status_code < 600:
+                raise httpx.HTTPStatusError(f"upstream {r.status_code}", request=r.request, response=r)
+            r.raise_for_status()
+            return r.json()
+        except (httpx.HTTPStatusError, httpx.TransportError) as e:
+            last_exc = e
+            if attempt == 3:
+                break
+            time.sleep(2 ** attempt * 5)  # 5s, 10s, 20s
+    raise last_exc  # type: ignore[misc]
 
 
 def _local_hour_label(iso_str: str) -> str:
