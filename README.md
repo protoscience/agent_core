@@ -28,12 +28,13 @@ Discord ──► Discord Bot (full trading + research)
                 │
                 └──► logs/cost.db (per-turn spend)
 
-WhatsApp ──► OpenClaw (VPS) ──► SSH tunnel ──► WA Bridge (research only)
-                                                    │
-                                                    ├──► Claude Agent SDK ──► Alpaca (quotes/options data)
-                                                    │                    ──► SearXNG (web search)
-                                                    │
-                                                    └──► logs/cost.db (per-turn spend)
+WhatsApp ──► OpenClaw ──► [ optional SSH tunnel ] ──► WA Bridge (research only)
+                                                          │
+                                                          ├──► Claude Agent SDK
+                                                          │         ──► Alpaca
+                                                          │         ──► SearXNG
+                                                          │
+                                                          └──► logs/cost.db
 
 Shared:
   logs/cost.db  ◄── trading-cost-rollup.timer  (nightly: raw→daily→weekly, prune)
@@ -45,6 +46,21 @@ Shared:
 **WhatsApp**: Research only — no account info, no positions, no order placement. Designed for group discussions.
 
 **Cost tracking**: Both services log `(channel, peer, turns, cost_usd)` to a local SQLite DB on every `ResultMessage`. A nightly systemd timer rolls raw turns into `daily`, rebuilds `weekly` from `daily`, and prunes daily rows older than a year.
+
+## Deployment options
+
+The WhatsApp path supports two layouts. Pick whichever matches your environment — the code is identical, only the OpenClaw location and the tunnel change.
+
+|   | **Option A — same machine** | **Option B — VPS (recommended for 24/7)** |
+|---|---|---|
+| OpenClaw runs on | Your local PC | A remote VPS |
+| WA bridge runs on | Your local PC | Your local PC |
+| Reverse SSH tunnel | Not needed | Required (`-R 4000:127.0.0.1:4000`) |
+| Extra systemd units | none | `trading-ssh-tunnel` + `trading-tunnel-healthcheck` |
+| WhatsApp session stays online when | your local PC is online | the VPS is online (typically 24/7) |
+| When to pick it | Always-on desktop/home server; simpler setup; no VPS cost | You want the WhatsApp session to survive your laptop sleeping / rebooting; willing to run a small VPS |
+
+The rest of the setup (Alpaca keys, SearXNG, Discord bot, cost tracking) is identical either way.
 
 ## Prerequisites
 
@@ -133,7 +149,7 @@ RestartSec=5
 WantedBy=default.target
 ```
 
-**trading-ssh-tunnel.service** (reverse tunnel to VPS for WhatsApp)
+**trading-ssh-tunnel.service** — *Option B (VPS) only; skip this file for Option A*
 ```ini
 [Unit]
 Description=Trading Agent - Reverse SSH Tunnel to VPS
@@ -171,31 +187,46 @@ Enable and start:
 # Allow services to run after logout
 sudo loginctl enable-linger $USER
 
-# Install autossh and inotify-tools
+# For Option B (VPS): install autossh. inotify-tools is needed either way.
 sudo apt install autossh inotify-tools
 
 systemctl --user daemon-reload
+
+# Option A (same machine): skip trading-ssh-tunnel
+systemctl --user enable --now trading-discord trading-wa-bridge trading-watcher
+
+# Option B (VPS): include the tunnel
 systemctl --user enable --now trading-discord trading-wa-bridge trading-ssh-tunnel trading-watcher
 ```
 
 ## WhatsApp Setup (via OpenClaw)
 
-WhatsApp integration uses [OpenClaw](https://github.com/openclaw/openclaw) as a gateway on a VPS.
+WhatsApp integration uses [OpenClaw](https://github.com/openclaw/openclaw). Same steps for both deployment options — only **where** you run OpenClaw and whether you need an SSH tunnel differ.
 
-### On the VPS:
+### Install OpenClaw
 
-1. Install OpenClaw:
-   ```bash
-   sudo npm install -g openclaw@2026.4.9
-   ```
+Install on whichever host is running it (local PC for Option A, VPS for Option B):
 
-2. Configure WhatsApp channel and pair:
-   ```bash
-   openclaw configure
-   openclaw channels login --channel whatsapp
-   ```
+```bash
+sudo npm install -g openclaw@2026.4.14
+```
 
-3. Add the bridge model provider to `~/.openclaw/openclaw.json`:
+### Configure and pair WhatsApp
+
+Run these on the same host:
+
+```bash
+openclaw configure
+openclaw channels login --channel whatsapp
+# Scan the QR code with your WhatsApp → Settings → Linked Devices
+```
+
+### Point OpenClaw at the bridge
+
+Edit `~/.openclaw/openclaw.json` on the OpenClaw host. The config is identical for both options — the bridge URL is always `http://127.0.0.1:4000` because:
+
+- **Option A** — the bridge is literally on localhost.
+- **Option B** — OpenClaw sees the bridge via the reverse SSH tunnel, so `127.0.0.1:4000` on the VPS is actually the bridge running on your local PC.
    ```json
    {
      "env": {
@@ -249,12 +280,24 @@ WhatsApp integration uses [OpenClaw](https://github.com/openclaw/openclaw) as a 
    docs, replying to a Sonic message satisfies mention gating but does NOT
    bypass the sender allowlist.
 
-4. Start the gateway:
-   ```bash
-   openclaw gateway
-   ```
+### Start the gateway
 
-The reverse SSH tunnel (from your local machine) makes the bridge reachable at `127.0.0.1:4000` on the VPS. All traffic is SSH-encrypted.
+```bash
+openclaw gateway
+```
+
+Or run it as a systemd user service so it survives reboots.
+
+### Option B only — set up the reverse SSH tunnel
+
+On your local PC, the `trading-ssh-tunnel.service` (systemd unit shown above) runs:
+
+```bash
+autossh -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes -R 4000:127.0.0.1:4000 user@your-vps-host
+```
+
+This makes the bridge reachable at `127.0.0.1:4000` on the VPS. All traffic is SSH-encrypted.
 
 ## Environment Variables
 
