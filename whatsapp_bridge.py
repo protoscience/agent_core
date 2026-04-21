@@ -35,8 +35,6 @@ log = logging.getLogger("wa-bridge")
 
 BRIDGE_TOKEN = os.environ.get("BRIDGE_TOKEN", "")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "4000"))
-MAX_REQUEST_MESSAGES = 50
-MAX_REQUESTS_PER_MINUTE = 10
 
 if not BRIDGE_TOKEN:
     log.error("BRIDGE_TOKEN is not set. Refusing to start without auth.")
@@ -49,7 +47,6 @@ SESSION_MAX_AGE = 12 * 60 * 60  # 12 hours idle → auto-reset
 _sessions: dict[str, ClaudeSDKClient] = {}
 _session_meta: dict[str, dict] = {}
 _locks: dict[str, asyncio.Lock] = {}
-_rate_window: dict[str, list[float]] = {}
 
 
 class Message(BaseModel):
@@ -100,16 +97,6 @@ def _derive_peer_key(req: "ChatRequest") -> str | None:
     if not first:
         return None
     return "wa-" + hashlib.sha256(first.encode("utf-8")).hexdigest()[:16]
-
-
-def _check_rate_limit(key: str) -> bool:
-    now = time.time()
-    window = _rate_window.setdefault(key, [])
-    window[:] = [t for t in window if now - t < 60]
-    if len(window) >= MAX_REQUESTS_PER_MINUTE:
-        return False
-    window.append(now)
-    return True
 
 
 async def _expire_session(key: str):
@@ -188,14 +175,6 @@ async def chat_completions(req: ChatRequest, request: Request):
     key = _derive_peer_key(req)
     if not key:
         raise HTTPException(status_code=400, detail="unable to derive caller identity")
-
-    # Rate limit per caller
-    if not _check_rate_limit(key):
-        raise HTTPException(status_code=429, detail="rate limit exceeded")
-
-    # Message count cap
-    if len(req.messages) > MAX_REQUEST_MESSAGES:
-        raise HTTPException(status_code=400, detail=f"max {MAX_REQUEST_MESSAGES} messages")
 
     log.info(f"Request: peer={key[:8]}... msgs={len(req.messages)} stream={req.stream}")
 
