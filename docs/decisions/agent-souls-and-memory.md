@@ -15,7 +15,7 @@ Earlier versions of this doc flagged per-sender memory in groups as blocked by O
 | Clock | What it is | Retention |
 |---|---|---|
 | Session TTL (`SESSION_MAX_AGE = 12h`) | Live Claude SDK subprocess holding raw conversation | 12h idle → reaped. Kept as-is. |
-| Memory file (`MEMORY.md` per peer, added Phase 1) | Distilled facts on disk | Permanent |
+| Memory file (`MEMORY.md` per peer, added Phase 1) | Distilled facts on disk | 60 days since last mention; reinforcement refreshes the timer. Cap 50 facts per sender. |
 | `short_term.jsonl` (added Phase 2) | Pending facts awaiting promotion | ~30d; promoted or expired |
 
 Extending the session TTL to a week was considered and rejected — each live session holds ~150 MB RAM per peer and inflates cache-read tokens every turn, and memory belongs in a file anyway.
@@ -32,13 +32,15 @@ Extending the session TTL to a week was considered and rejected — each live se
 
 ### Phase 1 — Soul + long-term memory only (~4h)
 
-- `prompts/sonic_soul.md`, `prompts/supersonic_soul.md` — agent personality, quirks, humor, vocab boundaries. Git-tracked. Loaded into the system prompt every turn.
+- `prompts/sonic_soul.md`, `prompts/supersonic_soul.md` — agent personality, quirks, humor, vocab boundaries. Git-tracked. Loaded into the system prompt at session creation.
 - `logs/memory/<agent>/<sender_id>/MEMORY.md` — per-sender facts, markdown, injected into the system prompt after the soul block. `sender_id` is the E.164 phone parsed from OpenClaw's metadata block (WhatsApp) or the Discord user id (Discord).
-- New `remember(fact)` tool — appends to the sender's `MEMORY.md` with timestamp + light dedup.
+- New `remember(fact)` tool — appends to the sender's `MEMORY.md`. Dedup refreshes an existing fact's date rather than skipping the write, so re-mentioned facts never age out.
+- New `recall_about_me()` tool — returns the sender's current memory for "what do you remember about me?" style queries.
+- **Retention / TTL**: each bullet carries a `[YYYY-MM-DD]` date prefix. Bullets silent for more than `FACT_TTL_DAYS = 60` days are dropped (filtered on read, compacted on write). `MAX_FACTS = 50` per sender hard cap.
 - Bridge and Discord bot both read/write per-sender files but in **separate per-agent trees** (siloing — `logs/memory/sonic/...` vs `logs/memory/supersonic/...`).
 - Fallback: if metadata parsing fails (malformed JSON, absent block), fall back to the existing hash-of-first-message peer key and continue without memory. Never crash a turn on memory errors.
 
-After Phase 1, Sonic has a voice, and remembers things like "long-term investor, owns SCHD/VOO, dislikes options" per actual person — Bala, KP_NeverQuits, Boss, Ayaps each have their own memory regardless of whether they DM or @-mention in groups.
+After Phase 1, Sonic has a voice and remembers things like "long-term investor, owns SCHD/VOO, dislikes options" per actual person — Bala, KP_NeverQuits, Boss, Ayaps each have their own memory regardless of whether they DM or @-mention in groups. Facts that stop being relevant age out after ~2 months of silence.
 
 ### Phase 2 — Short-term + promotion (~4h)
 
