@@ -26,8 +26,11 @@ services:
     image: grafana/grafana:latest
     container_name: trading-agent-grafana
     ports:
-      - "127.0.0.1:3000:3000"
-    # Run as host-matching UID so the read-only bind mount of ./logs/cost.db
+      # GRAFANA_BIND defaults to 127.0.0.1 (localhost-only). Set to 0.0.0.0
+      # in .env to expose on your LAN (e.g. http://192.168.x.x:3000).
+      # Grafana requires login — set a strong admin password before exposing.
+      - "${GRAFANA_BIND:-127.0.0.1}:3000:3000"
+    # Run as host-matching UID so the bind mount of ./logs/cost.db
     # is readable without chmod gymnastics.
     user: "1000"
     volumes:
@@ -45,7 +48,9 @@ services:
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
-      - GF_SERVER_ROOT_URL=http://127.0.0.1:3000
+      # Share-URLs and redirect-URLs use this. Set to your LAN host in
+      # .env when exposing on LAN, otherwise share links point at localhost.
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
     restart: unless-stopped
     logging:
       driver: "json-file"
