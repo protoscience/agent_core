@@ -199,9 +199,9 @@
         {
           "refId": "A",
           "datasource": { "type": "frser-sqlite-datasource", "uid": "cost_db" },
-          "queryType": "time series",
-          "rawQueryText": "SELECT strftime('%s', ts) AS time, channel AS metric, cost_usd AS value FROM turns WHERE datetime(ts) >= datetime($__from / 1000, 'unixepoch') AND datetime(ts) <= datetime($__to / 1000, 'unixepoch') ORDER BY ts",
-          "queryText": "SELECT strftime('%s', ts) AS time, channel AS metric, cost_usd AS value FROM turns WHERE datetime(ts) >= datetime($__from / 1000, 'unixepoch') AND datetime(ts) <= datetime($__to / 1000, 'unixepoch') ORDER BY ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT datetime(ts) AS time, channel, cost_usd FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY ts",
+          "queryText": "SELECT datetime(ts) AS time, channel, cost_usd FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY ts",
           "timeColumns": ["time"]
         }
       ]
@@ -218,9 +218,9 @@
         {
           "refId": "A",
           "datasource": { "type": "frser-sqlite-datasource", "uid": "cost_db" },
-          "queryType": "time series",
-          "rawQueryText": "SELECT strftime('%s', ts) AS time, 'cache_read' AS metric, cache_read_tokens AS value FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'cache_creation', cache_creation_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'output', output_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'input', input_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY time",
-          "queryText": "SELECT strftime('%s', ts) AS time, 'cache_read' AS metric, cache_read_tokens AS value FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'cache_creation', cache_creation_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'output', output_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') UNION ALL SELECT strftime('%s', ts), 'input', input_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY time",
+          "queryType": "table",
+          "rawQueryText": "SELECT datetime(ts) AS time, cache_read_tokens, cache_creation_tokens, output_tokens, input_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY ts",
+          "queryText": "SELECT datetime(ts) AS time, cache_read_tokens, cache_creation_tokens, output_tokens, input_tokens FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') ORDER BY ts",
           "timeColumns": ["time"]
         }
       ]
@@ -237,9 +237,9 @@
         {
           "refId": "A",
           "datasource": { "type": "frser-sqlite-datasource", "uid": "cost_db" },
-          "queryType": "time series",
-          "rawQueryText": "SELECT CAST(strftime('%s', datetime(ts, 'start of hour')) AS INTEGER) AS time, channel AS metric, SUM(turns) AS value FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') GROUP BY datetime(ts, 'start of hour'), channel ORDER BY time",
-          "queryText": "SELECT CAST(strftime('%s', datetime(ts, 'start of hour')) AS INTEGER) AS time, channel AS metric, SUM(turns) AS value FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') GROUP BY datetime(ts, 'start of hour'), channel ORDER BY time",
+          "queryType": "table",
+          "rawQueryText": "SELECT datetime(ts, 'start of hour') AS time, channel, SUM(turns) AS turns FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') GROUP BY datetime(ts, 'start of hour'), channel ORDER BY time",
+          "queryText": "SELECT datetime(ts, 'start of hour') AS time, channel, SUM(turns) AS turns FROM turns WHERE datetime(ts) BETWEEN datetime($__from / 1000, 'unixepoch') AND datetime($__to / 1000, 'unixepoch') GROUP BY datetime(ts, 'start of hour'), channel ORDER BY time",
           "timeColumns": ["time"]
         }
       ]
