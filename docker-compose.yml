@@ -21,3 +21,37 @@ services:
       options:
         max-size: "1m"
         max-file: "1"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-agent-grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    # Run as host-matching UID so the read-only bind mount of ./logs/cost.db
+    # is readable without chmod gymnastics.
+    user: "1000"
+    volumes:
+      # logs/ must be writable so SQLite can create/refresh its WAL+shm
+      # sidecar files on open, even though Grafana only issues SELECT queries.
+      # :ro breaks the plugin with "unable to open database file (14)".
+      - ./logs:/data
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      # Community SQLite plugin is unsigned; explicit allow.
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=frser-sqlite-datasource
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=http://127.0.0.1:3000
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  grafana-data:
