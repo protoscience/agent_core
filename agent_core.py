@@ -10,6 +10,7 @@ from tools import imagegen
 from tools import imagegen_rich
 from tools.confirm import confirm_callback
 from tools import memory as memory_mod
+from tools import auto_trade
 
 # Per-turn context set by the bridge/discord-bot before calling client.query().
 # Tools (remember, recall_about_me) read these to know which agent and sender
@@ -341,6 +342,46 @@ async def recall_about_me(args):
     return {"content": [{"type": "text", "text": mem}]}
 
 
+@tool(
+    "auto_place_order",
+    "Submit a paper-trading order WITHOUT human confirmation. Use this for "
+    "the auto-trading pipeline. Risk rails (symbol whitelist, $1k size, "
+    "5-position cap, -3%% daily loss kill, time window, mag7 stop-loss "
+    "policy) are enforced in code. If any rail blocks the order, the "
+    "reason is returned in the response. Dry-run mode (AUTO_TRADE_DRY_RUN "
+    "env var, default true) logs decisions without submitting. "
+    "source: tag for audit (e.g. 'manual-discord', 'llm-scan'). "
+    "reason: short human-readable context.",
+    {
+        "symbol": str,
+        "side": str,
+        "source": str,
+        "reason": str,
+        "order_type": str,
+        "limit_price": float,
+    },
+)
+async def auto_place_order(args):
+    intent = auto_trade.OrderIntent(
+        symbol=args["symbol"],
+        side=args["side"],
+        source=args.get("source", "manual-discord"),
+        reason=args.get("reason", ""),
+        order_type=args.get("order_type", "market"),
+        limit_price=args.get("limit_price"),
+    )
+    result = auto_trade.execute_order(intent)
+    txt = (
+        f"status: {result.status}\n"
+        f"reason: {result.reason}\n"
+        + (f"qty: {result.qty}\n" if result.qty is not None else "")
+        + (f"stop_loss: ${result.stop_loss_price}\n" if result.stop_loss_price else "")
+        + (f"est_cost: ${result.estimated_cost}\n" if result.estimated_cost is not None else "")
+        + (f"order_id: {result.order_id}\n" if result.order_id else "")
+    )
+    return {"content": [{"type": "text", "text": txt}]}
+
+
 ALL_TOOLS = [
     search_web,
     get_quote,
@@ -357,6 +398,7 @@ ALL_TOOLS = [
     create_price_chart,
     remember,
     recall_about_me,
+    auto_place_order,
 ]
 
 # Research-only subset: no account, positions, orders, or order placement.
