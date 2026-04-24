@@ -1,0 +1,10 @@
+[Unit]
+Description=Trading Agent - DB backup (03:15 local, staggered from cost-rollup @ 03:00)
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=trading-db-backup.service
+
+[Install]
+WantedBy=timers.target

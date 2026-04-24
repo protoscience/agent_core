@@ -1,0 +1,7 @@
+[Unit]
+Description=Trading Agent - Nightly DB backup (integrity check + local + rsync to VPS)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/eswar/claude/trading-agent
+ExecStart=/home/eswar/claude/trading-agent/.venv/bin/python -m tools.db_backup
