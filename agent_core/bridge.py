@@ -27,8 +27,10 @@ from typing import Callable, Awaitable
 from claude_agent_sdk import (
     ClaudeSDKClient,
     AssistantMessage,
+    UserMessage,
     TextBlock,
     ToolUseBlock,
+    ToolResultBlock,
     ResultMessage,
     ClaudeAgentOptions,
 )
@@ -273,6 +275,13 @@ def run_whatsapp_bridge(
             client = await _get_session(key)
             await client.query(latest)
             text_buf = ""
+            # IMAGE_MARKER paths surface in TWO places — sometimes Claude
+            # echoes them in his TextBlock output, but the canonical source
+            # is the ToolResult content of image-emitting tools (e.g.
+            # create_price_chart, create_analysis_image). Mirror the Discord
+            # bot's pattern: collect from tool results AND filter out any
+            # echoed copies from the assistant text.
+            image_paths: list[str] = []
             result_msg = None
             async for msg in client.receive_response():
                 if isinstance(msg, AssistantMessage):
@@ -281,16 +290,47 @@ def run_whatsapp_bridge(
                             text_buf += block.text
                         elif isinstance(block, ToolUseBlock):
                             log.info(f"tool: {block.name}")
+                elif isinstance(msg, UserMessage):
+                    # Tool results come back as UserMessage with ToolResultBlock
+                    for block in getattr(msg, "content", []) or []:
+                        if isinstance(block, ToolResultBlock):
+                            for item in (block.content or []):
+                                t = item.get("text") if isinstance(item, dict) else None
+                                if t and IMAGE_MARKER in t:
+                                    for line in t.splitlines():
+                                        if IMAGE_MARKER in line:
+                                            idx = line.index(IMAGE_MARKER) + len(IMAGE_MARKER)
+                                            p = line[idx:].strip()
+                                            if p and p not in image_paths:
+                                                image_paths.append(p)
                 elif isinstance(msg, ResultMessage):
                     result_msg = msg
                     break
-            reply = "\n".join(l for l in text_buf.splitlines() if IMAGE_MARKER not in l).strip()
+            # Strip any IMAGE_MARKER echoes Claude may have included in the
+            # text. Webhook-style consumers (Baileys gateway etc.) read
+            # `image_paths` and dispatch each PNG via their own image-send
+            # endpoint. OpenAI clients (OpenClaw) ignore unknown fields and
+            # see only `reply`.
+            clean_lines: list[str] = []
+            for line in text_buf.splitlines():
+                if IMAGE_MARKER in line:
+                    # Defensive: also pick up any echoes here just in case
+                    idx = line.index(IMAGE_MARKER) + len(IMAGE_MARKER)
+                    p = line[idx:].strip()
+                    if p and p not in image_paths:
+                        image_paths.append(p)
+                else:
+                    clean_lines.append(line)
+            reply = "\n".join(clean_lines).strip()
             if not reply:
                 reply = "(no reply)"
 
         cost = (result_msg.total_cost_usd or 0) if result_msg else 0
         turns = result_msg.num_turns if result_msg else 0
-        log.info(f"Reply: peer={key[:8]}... chars={len(reply)} turns={turns} cost=${cost:.4f}")
+        log.info(
+            f"Reply: peer={key[:8]}... chars={len(reply)} images={len(image_paths)} "
+            f"turns={turns} cost=${cost:.4f}"
+        )
         try:
             cost_log.log_turn(log_channel, key, turns, cost)
         except Exception:
@@ -307,6 +347,10 @@ def run_whatsapp_bridge(
                 "finish_reason": "stop",
             }],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            # Extension: list of local PNG paths the agent generated this turn.
+            # Standard OpenAI clients ignore this; webhook consumers read it
+            # and dispatch each path through their image-send pipeline.
+            "image_paths": image_paths,
         }
 
     @app.get("/v1/models")
